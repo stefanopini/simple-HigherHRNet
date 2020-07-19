@@ -20,10 +20,12 @@ estimation, loads the pre-trained weights, and make human predictions on a singl
 
 This repository is built along the lines of the repository
 [*simple-HRNet*](https://github.com/stefanopini/simple-HRNet).  
-Unfortunately, compared to HRNet, results and performance of HigherHRNet are quite disappointing: the network and the
-required post-processing are slower and the predictions look less precise.  
-Moreover, multiple posed are often predicted for the same person, requiring additional steps to filter out the redundant
-poses.
+Unfortunately, compared to HRNet, results and performance of HigherHRNet are somewhat disappointing: the network and 
+the required post-processing are slower and the predictions does not look more precise. 
+Moreover, multiple skeletons are often predicted for the same person, requiring additional steps to filter out the
+redundant poses.  
+On the other hand, being a bottom-up approach, HigherHRNet does not rely on any person detection algorithm like Yolo-v3
+and can be used for person detection too.
  
 ### Examples
 
@@ -67,7 +69,7 @@ The most useful parameters of the `__init__` function are:
   <td>return_bounding_boxes</td><td>the `predict` method returns also the bounding boxes</td>
  </tr>
  <tr>
-  <td>filter_redundant_poses</td><td>fiters out redundant poses (poses being almost identical)</td>
+  <td>filter_redundant_poses</td><td>redundant poses (poses being almost identical) are filtered out</td>
  </tr>
  <tr>
   <td>max_nof_people</td><td>maximum number of people in the scene</td>
@@ -123,3 +125,9 @@ python scripts/live-demo.py --help
     ├── scripts                 (scripts)
     └── weights                 (HigherHRnet weights)
     ```
+
+### ToDos
+- [ ] Add keypoint extraction script
+- [ ] Optimize the post-processing steps
+- [ ] Add COCO dataset and evaluation
+- [ ] Add Train/Test scripts
