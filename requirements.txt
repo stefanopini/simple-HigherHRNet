@@ -1,0 +1,10 @@
+ffmpeg-python>=0.2.0
+matplotlib>=3.0.2
+munkres>=1.1.2
+numpy>=1.16
+opencv-python>=3.4
+Pillow>=5.4
+vidgear>=0.1.4
+torch>=1.4.0
+torchvision>=0.5.0
+tqdm>=4.26
