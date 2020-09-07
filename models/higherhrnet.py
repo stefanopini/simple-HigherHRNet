@@ -250,6 +250,10 @@ if __name__ == '__main__':
     model.load_state_dict(
         torch.load('./weights/pose_higher_hrnet_w32_512.pth')
     )
+    # from collections import OrderedDict
+    # weights_ = torch.load('./weights/pose_higher_hrnet_w32_640.pth')
+    # weights = OrderedDict([(k[2:], v) for k, v in weights_.items()])
+    # res = model.load_state_dict(weights)
     print('ok!!')
 
     if torch.cuda.is_available():

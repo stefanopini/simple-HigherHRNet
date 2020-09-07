@@ -1,3 +1,5 @@
+from collections import OrderedDict
+
 import cv2
 import numpy as np
 import torch
@@ -90,9 +92,10 @@ class SimpleHigherHRNet:
 
         checkpoint = torch.load(checkpoint_path, map_location=self.device)
         if 'model' in checkpoint:
-            self.model.load_state_dict(checkpoint['model'])
-        else:
-            self.model.load_state_dict(checkpoint)
+            checkpoint = checkpoint['model']
+        # fix issue with official high-resolution weights
+        checkpoint = OrderedDict([(k[2:] if k[:2] == '1.' else k, v) for k, v in checkpoint.items()])
+        self.model.load_state_dict(checkpoint)
 
         if 'cuda' in str(self.device):
             print("device: 'cuda' - ", end="")
