@@ -256,16 +256,19 @@ class SimpleHigherHRNet:
             boxes = []
             for i in range(len(final_results)):
                 pts.insert(i, np.asarray(final_results[i]))
-                pts[i][..., [0, 1]] = pts[i][..., [1, 0]]  # restoring (y, x) order as in SimpleHRNet
-                pts[i] = pts[i][..., :3]
+                if len(pts[i]) > 0:
+                    pts[i][..., [0, 1]] = pts[i][..., [1, 0]]  # restoring (y, x) order as in SimpleHRNet
+                    pts[i] = pts[i][..., :3]
 
-                if self.return_bounding_boxes:
-                    left_top = np.min(pts[i][..., 0:2], axis=1)
-                    right_bottom = np.max(pts[i][..., 0:2], axis=1)
-                    # [x1, y1, x2, y2]
-                    boxes.insert(i, np.stack(
-                        [left_top[:, 1], left_top[:, 0], right_bottom[:, 1], right_bottom[:, 0]], axis=-1
-                    ))
+                    if self.return_bounding_boxes:
+                        left_top = np.min(pts[i][..., 0:2], axis=1)
+                        right_bottom = np.max(pts[i][..., 0:2], axis=1)
+                        # [x1, y1, x2, y2]
+                        boxes.insert(i, np.stack(
+                            [left_top[:, 1], left_top[:, 0], right_bottom[:, 1], right_bottom[:, 0]], axis=-1
+                        ))
+                else:
+                    boxes.insert(i, [])
 
         res = list()
         if self.return_heatmaps:

@@ -124,7 +124,13 @@ class HeatmapParser(object):
         #                   for k in sorted(joint_confidence.keys(), reverse=True)[:self.max_num_people]}
 
         # ret = torch.tensor([joint_dict[i] for i in joint_dict], dtype=torch.float32, device=device)
-        ret = torch.stack([joint_dict[i] for i in joint_dict])
+        if len(joint_dict) > 0:
+            ret = torch.stack([joint_dict[i] for i in joint_dict])
+        else:
+            # if no people are detected, return a tensor with size 0
+            size = list(default_.size())
+            size.insert(0, 0)
+            ret = torch.zeros(size)
         return ret
 
     def match_torch(self, tag_k, loc_k, val_k):
