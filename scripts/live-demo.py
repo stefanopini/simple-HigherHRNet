@@ -15,17 +15,18 @@ from misc.utils import find_person_id_associations
 
 
 def main(camera_id, filename, hrnet_c, hrnet_j, hrnet_weights, hrnet_joints_set, image_resolution, disable_tracking,
-         max_nof_people, max_batch_size, disable_vidgear, save_video, video_format, video_framerate, device):
+         max_nof_people, max_batch_size, disable_vidgear, save_video, video_format, video_framerate, device, extract_kpts):
     if device is not None:
         device = torch.device(device)
+        print("Using GPU")
     else:
         if torch.cuda.is_available():
             torch.backends.cudnn.deterministic = True
             device = torch.device('cuda')
         else:
             device = torch.device('cpu')
+            print("Using CPU")
 
-    # print(device)
 
     has_display = 'DISPLAY' in os.environ.keys() or sys.platform == 'win32'
     video_writer = None
@@ -59,6 +60,8 @@ def main(camera_id, filename, hrnet_c, hrnet_j, hrnet_weights, hrnet_joints_set,
         prev_person_ids = None
         next_person_id = 0
 
+    frame_count = 0
+    dic = {}
     while True:
         t = time.time()
 
@@ -103,7 +106,12 @@ def main(camera_id, filename, hrnet_c, hrnet_j, hrnet_weights, hrnet_joints_set,
             frame = draw_points_and_skeleton(frame, pt, joints_dict()[hrnet_joints_set]['skeleton'], person_index=pid,
                                              points_color_palette='gist_rainbow', skeleton_color_palette='jet',
                                              points_palette_samples=10)
+            if extract_kpts:
+                dic[frame_count] = pt[:, :2]
+            # print("\nframe: {}".format(frame_count))
 
+        if extract_kpts:
+            np.savez("output_kpts", dic)
         fps = 1. / (time.time() - t)
         print('\rframerate: %f fps / detected people: %d' % (fps, len(pts)), end='')
 
@@ -124,6 +132,7 @@ def main(camera_id, filename, hrnet_c, hrnet_j, hrnet_weights, hrnet_joints_set,
                 fourcc = cv2.VideoWriter_fourcc(*video_format)  # video format
                 video_writer = cv2.VideoWriter('output.avi', fourcc, video_framerate, (frame.shape[1], frame.shape[0]))
             video_writer.write(frame)
+        frame_count += 1
 
     if save_video:
         video_writer.release()
@@ -160,5 +169,6 @@ if __name__ == '__main__':
                                          "set to `cuda:IDS` to use one or more specific GPUs "
                                          "(e.g. `cuda:0` `cuda:1,2`); "
                                          "set to `cpu` to run on cpu.", type=str, default=None)
+    parser.add_argument("--extract_kpts", help="save output keypoints", action="store_true")
     args = parser.parse_args()
     main(**args.__dict__)
