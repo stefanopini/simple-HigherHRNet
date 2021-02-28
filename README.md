@@ -127,7 +127,7 @@ python scripts/live-demo.py --help
     ```
 
 ### ToDos
-- [ ] Add keypoint extraction script
+- [x] Add keypoint extraction script (thanks to [@wuyenlin](https://github.com/wuyenlin))
 - [ ] Optimize the post-processing steps
 - [ ] Add COCO dataset and evaluation
 - [ ] Add Train/Test scripts
