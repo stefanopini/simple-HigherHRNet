@@ -108,7 +108,7 @@ if __name__ == '__main__':
     parser.add_argument("--filename", "-f", help="open the specified video",
                         type=str, default=None)
     parser.add_argument("--hrnet_c", "-c", help="hrnet parameters - number of channels (if model is HRNet), "
-                                                "resnet size (if model is PoseResNet)", type=int, default=48)
+                                                "resnet size (if model is PoseResNet)", type=int, default=32)
     parser.add_argument("--hrnet_j", "-j", help="hrnet parameters - number of joints", type=int, default=17)
     parser.add_argument("--hrnet_weights", "-w", help="hrnet parameters - path to the pretrained weights",
                         type=str, default="./weights/pose_higher_hrnet_w32_512.pth")
