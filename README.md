@@ -98,6 +98,18 @@ For help:
 python scripts/live-demo.py --help
 ```
 
+### Extracting keypoints:
+
+From a saved video:
+```
+python scripts/extract-keypoints.py --format csv --filename video.mp4
+```
+
+For help:
+```
+python scripts/extract-keypoints.py --help
+```
+
 ### Installation instructions
 
 - Clone the repository  
