@@ -4,12 +4,88 @@ import cv2
 import numpy as np
 import torch
 from torchvision.transforms import transforms
-
+import tensorrt as trt
 from models.higherhrnet import HigherHRNet
 from misc.HeatmapParser import HeatmapParser
-from misc.utils import get_multi_scale_size, resize_align_multi_scale, get_multi_stage_outputs, aggregate_results, get_final_preds, bbox_iou
+from misc.utils import get_multi_scale_size, resize_align_multi_scale, get_multi_stage_outputs, aggregate_results, get_final_preds, bbox_iou,TRTModule_hrnet
+from collections import OrderedDict,namedtuple
+# from cuda import cuda, nvrtc
 
+# class HostDeviceMem(object):
+#     def __init__(self, host_mem, device_mem):
+#         self.host = host_mem
+#         self.device = device_mem
 
+#     def __str__(self):
+#         return "Host:\n" + str(self.host) + "\nDevice:\n" + str(self.device)
+
+#     def __repr__(self):
+#         return self.__str__()
+# class TrtModel:
+    
+#     def __init__(self,engine_path,max_batch_size=1,dtype=np.float32):
+        
+#         self.engine_path = engine_path
+#         self.dtype = dtype
+#         self.logger = trt.Logger(trt.Logger.WARNING)
+#         self.runtime = trt.Runtime(self.logger)
+#         self.engine = self.load_engine(self.runtime, self.engine_path)
+#         self.max_batch_size = max_batch_size
+#         self.inputs, self.outputs, self.bindings, self.stream = self.allocate_buffers()
+#         self.context = self.engine.create_execution_context()
+
+                
+                
+#     @staticmethod
+#     def load_engine(trt_runtime, engine_path):
+#         trt.init_libnvinfer_plugins(None, "")             
+#         with open(engine_path, 'rb') as f:
+#             engine_data = f.read()
+#         engine = trt_runtime.deserialize_cuda_engine(engine_data)
+#         return engine
+    
+#     def allocate_buffers(self):
+        
+#         inputs = []
+#         outputs = []
+#         bindings = []
+#         # stream = cuda.Stream()
+#         err, stream = cuda.cuStreamCreate(0)
+        
+#         for binding in self.engine:
+#             size = trt.volume(self.engine.get_binding_shape(binding)) * self.max_batch_size
+#             err, dXclass = cuda.cuMemAlloc(size)
+#             err, dYclass = cuda.cuMemAlloc(size)
+#             err, dOutclass = cuda.cuMemAlloc(size)
+#             host_mem = cuda.pagelocked_empty(size, self.dtype)
+#             device_mem = cuda.mem_alloc(host_mem.nbytes)
+            
+#             bindings.append(int(device_mem))
+
+#             if self.engine.binding_is_input(binding):
+#                 inputs.append(HostDeviceMem(host_mem, device_mem))
+#             else:
+#                 outputs.append(HostDeviceMem(host_mem, device_mem))
+        
+#         return inputs, outputs, bindings, stream
+       
+            
+#     def __call__(self,x:np.ndarray,batch_size=2):
+        
+#         x = x.astype(self.dtype)
+        
+#         np.copyto(self.inputs[0].host,x.ravel())
+        
+#         for inp in self.inputs:
+#             cuda.memcpy_htod_async(inp.device, inp.host, self.stream)
+        
+#         self.context.execute_async(batch_size=batch_size, bindings=self.bindings, stream_handle=self.stream.handle)
+#         for out in self.outputs:
+#             cuda.memcpy_dtoh_async(out.host, out.device, self.stream) 
+            
+        
+#         self.stream.synchronize()
+#         return [out.host.reshape(batch_size,-1) for out in self.outputs]
 class SimpleHigherHRNet:
     """
     SimpleHigherHRNet class.
@@ -30,7 +106,8 @@ class SimpleHigherHRNet:
                  filter_redundant_poses=True,
                  max_nof_people=30,
                  max_batch_size=32,
-                 device=torch.device("cpu")):
+                 device=torch.device("cpu"),
+                 trt_=True):
         """
         Initializes a new SimpleHigherHRNet object.
         HigherHRNet is initialized on the torch.device("device") and
@@ -74,6 +151,7 @@ class SimpleHigherHRNet:
         self.max_nof_people = max_nof_people
         self.max_batch_size = max_batch_size
         self.device = device
+        self.trt_=trt_
 
         # assert nof_joints in (14, 15, 17)
         if self.nof_joints == 14:
@@ -96,7 +174,36 @@ class SimpleHigherHRNet:
         # fix issue with official high-resolution weights
         checkpoint = OrderedDict([(k[2:] if k[:2] == '1.' else k, v) for k, v in checkpoint.items()])
         self.model.load_state_dict(checkpoint)
-
+        # if True:
+        #     import tensorrt as trt  # https://developer.nvidia.com/nvidia-tensorrt-download
+        #     # check_version(trt.__version__, '7.0.0', hard=True)  # require tensorrt>=7.0.0
+        #     if device.type == 'cpu':
+        #         device = torch.device('cuda:0')
+        #     Binding = namedtuple('Binding', ('name', 'dtype', 'shape', 'data', 'ptr'))
+        #     # logger = trt.Logger(trt.Logger.INFO)
+        #     with open(w, 'rb') as f, trt.Runtime(logger) as runtime:
+        #         model = runtime.deserialize_cuda_engine(f.read())
+        #     context = model.create_execution_context()
+        #     bindings = OrderedDict()
+        #     output_names = []
+        #     fp16 = False  # default updated below
+        #     dynamic = False
+        #     for i in range(model.num_bindings):
+        #         name = model.get_binding_name(i)
+        #         dtype = trt.nptype(model.get_binding_dtype(i))
+        #         if model.binding_is_input(i):
+        #             if -1 in tuple(model.get_binding_shape(i)):  # dynamic
+        #                 dynamic = True
+        #                 context.set_binding_shape(i, tuple(model.get_profile_shape(0, i)[2]))
+        #             if dtype == np.float16:
+        #                 fp16 = True
+        #         else:  # output
+        #             output_names.append(name)
+        #         shape = tuple(context.get_binding_shape(i))
+        #         im = torch.from_numpy(np.empty(shape, dtype=dtype)).to(device)
+        #         bindings[name] = Binding(name, dtype, shape, im, int(im.data_ptr()))
+        #     binding_addrs = OrderedDict((n, d.ptr) for n, d in bindings.items())
+        #     batch_size = bindings['images'].shape[0] 
         if 'cuda' in str(self.device):
             print("device: 'cuda' - ", end="")
 
@@ -114,10 +221,40 @@ class SimpleHigherHRNet:
             print("device: 'cpu'")
         else:
             raise ValueError('Wrong device name.')
-
-        self.model = self.model.to(device)
-        self.model.eval()
-
+        if not trt_:
+            self.model = self.model.to(device)
+            self.model.eval()
+        else:
+            # import pycuda.driver as cuda
+            # self.model = TrtModel('pose_higher_hrnet_w32_512.engine')
+            if device.type == 'cpu':
+                    device = torch.device('cuda:0')
+            self.model=TRTModule_hrnet(path='pose_higher_hrnet_w32_512.engine',device=self.device)
+            # Binding = namedtuple('Binding', ('name', 'dtype', 'shape', 'data', 'ptr'))
+            # logger = trt.Logger(trt.Logger.INFO)
+            # with open('pose_higher_hrnet_w32_512.engine', 'rb') as f, trt.Runtime(logger) as runtime:
+            #     self.model = runtime.deserialize_cuda_engine(f.read())
+            # self.context = self.model.create_execution_context()
+            # self.bindings = OrderedDict()
+            # self.output_names = []
+            # fp16 = False  # default updated below
+            # dynamic = False
+            # for i in range(self.model.num_bindings):
+            #     name = self.model.get_binding_name(i)
+            #     dtype = trt.nptype(self.model.get_binding_dtype(i))
+            #     if self.model.binding_is_input(i):
+            #         if -1 in tuple(self.model.get_binding_shape(i)):  # dynamic
+            #             dynamic = True
+            #             self.context.set_binding_shape(i, tuple(self.model.get_profile_shape(0, i)[2]))
+            #         if dtype == np.float16:
+            #             fp16 = True
+            #     else:  # output
+            #         self.output_names.append(name)
+            #     shape = tuple(self.context.get_binding_shape(i))
+            #     im = torch.from_numpy(np.empty(shape, dtype=dtype)).to(device)
+            #     self.bindings[name] = Binding(name, dtype, shape, im, int(im.data_ptr()))
+            # self.binding_addrs = OrderedDict((n, d.ptr) for n, d in self.bindings.items())
+            # self.batch_size = self.bindings['images'].shape[0] 
         self.output_parser = HeatmapParser(num_joints=self.nof_joints,
                                            joint_set=self.joint_set,
                                            max_num_people=self.max_nof_people,
@@ -201,6 +338,7 @@ class SimpleHigherHRNet:
                     image = image.to(self.device)
                     images.append(image)
                 images = torch.cat(images)
+                # images=images
 
                 # inference
                 # output: list of HigherHRNet outputs (heatmaps)

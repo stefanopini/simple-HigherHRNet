@@ -7,7 +7,7 @@ import time
 import torch
 from vidgear.gears import CamGear
 import numpy as np
-
+# import time
 sys.path.insert(1, os.getcwd())
 from SimpleHigherHRNet import SimpleHigherHRNet
 from misc.visualization import draw_points, draw_skeleton, draw_points_and_skeleton, joints_dict, check_video_rotation
@@ -66,17 +66,20 @@ def main(camera_id, filename, hrnet_c, hrnet_j, hrnet_weights, hrnet_joints_set,
 
         if filename is not None or disable_vidgear:
             ret, frame = video.read()
+            frame = cv2.resize(frame,(672,376))
+
             if not ret:
                 break
             if rotation_code is not None:
                 frame = cv2.rotate(frame, rotation_code)
         else:
             frame = video.read()
+            frame = cv2.resize(frame,(672,376))
             if frame is None:
                 break
 
         pts = model.predict(frame)
-
+        # print(pts)
         if not disable_tracking:
             boxes, pts = pts
 
@@ -145,7 +148,7 @@ if __name__ == '__main__':
                                                 "resnet size (if model is PoseResNet)", type=int, default=32)
     parser.add_argument("--hrnet_j", "-j", help="hrnet parameters - number of joints", type=int, default=17)
     parser.add_argument("--hrnet_weights", "-w", help="hrnet parameters - path to the pretrained weights",
-                        type=str, default="./weights/pose_higher_hrnet_w32_512.pth")
+                        type=str, default="./pose_higher_hrnet_w32_512.pth")
     parser.add_argument("--hrnet_joints_set",
                         help="use the specified set of joints ('coco' and 'mpii' are currently supported)",
                         type=str, default="coco")
