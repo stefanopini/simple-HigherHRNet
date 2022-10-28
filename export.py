@@ -459,7 +459,7 @@ def export_tfjs(file, prefix=colorstr('TensorFlow.js:')):
 def run(
         data=ROOT / 'data/coco128.yaml',  # 'dataset.yaml path'
         weights=ROOT / 'pose_higher_hrnet_w32_512',  # weights path
-        imgsz=(512, 512),  # image (height, width)
+        imgsz=(512, 960),  # image (height, width)
         batch_size=1,  # batch size
         device='cpu',  # cuda device, i.e. 0 or 0,1,2,3 or cpu
         include=('torchscript', 'onnx'),  # include formats
@@ -495,7 +495,7 @@ def run(
         assert not dynamic, '--half not compatible with --dynamic, i.e. use either --half or --dynamic but not both'
     # model = attempt_load(weights, device=device, inplace=True, fuse=True)  # load FP32 model
     model = HigherHRNet(32,17)
-    model.load_state_dict(torch.load('pose_higher_hrnet_w32_512.pth'))
+    model.load_state_dict(torch.load(weights))
     model.cuda()
     # Checks
     imgsz *= 2 if len(imgsz) == 1 else 1  # expand
@@ -583,8 +583,8 @@ def run(
 def parse_opt():
     parser = argparse.ArgumentParser()
     parser.add_argument('--data', type=str, default=ROOT / 'data/coco128.yaml', help='dataset.yaml path')
-    parser.add_argument('--weights', nargs='+', type=str, default=ROOT / 'pose_higher_hrnet_w32_512.pt', help='model.pt path(s)')
-    parser.add_argument('--imgsz', '--img', '--img-size', nargs='+', type=int, default=[640, 640], help='image (h, w)')
+    parser.add_argument('--weights', nargs='+', type=str, default=ROOT / 'weights/pose_higher_hrnet_w32_512.pth', help='model.pt path(s)')
+    parser.add_argument('--imgsz', '--img', '--img-size', nargs='+', type=int, default=[512, 960], help='image (h, w)')
     parser.add_argument('--batch-size', type=int, default=1, help='batch size')
     parser.add_argument('--device', default='cpu', help='cuda device, i.e. 0 or 0,1,2,3 or cpu')
     parser.add_argument('--half', action='store_true', help='FP16 half-precision export')

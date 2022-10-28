@@ -107,7 +107,7 @@ class SimpleHigherHRNet:
                  max_nof_people=30,
                  max_batch_size=32,
                  device=torch.device("cpu"),
-                 trt_=True):
+                 trt_=False):
         """
         Initializes a new SimpleHigherHRNet object.
         HigherHRNet is initialized on the torch.device("device") and
@@ -168,60 +168,54 @@ class SimpleHigherHRNet:
         else:
             raise ValueError('Wrong model name.')
 
-        checkpoint = torch.load(checkpoint_path, map_location=self.device)
-        if 'model' in checkpoint:
-            checkpoint = checkpoint['model']
-        # fix issue with official high-resolution weights
-        checkpoint = OrderedDict([(k[2:] if k[:2] == '1.' else k, v) for k, v in checkpoint.items()])
-        self.model.load_state_dict(checkpoint)
-        # if True:
-        #     import tensorrt as trt  # https://developer.nvidia.com/nvidia-tensorrt-download
-        #     # check_version(trt.__version__, '7.0.0', hard=True)  # require tensorrt>=7.0.0
-        #     if device.type == 'cpu':
-        #         device = torch.device('cuda:0')
-        #     Binding = namedtuple('Binding', ('name', 'dtype', 'shape', 'data', 'ptr'))
-        #     # logger = trt.Logger(trt.Logger.INFO)
-        #     with open(w, 'rb') as f, trt.Runtime(logger) as runtime:
-        #         model = runtime.deserialize_cuda_engine(f.read())
-        #     context = model.create_execution_context()
-        #     bindings = OrderedDict()
-        #     output_names = []
-        #     fp16 = False  # default updated below
-        #     dynamic = False
-        #     for i in range(model.num_bindings):
-        #         name = model.get_binding_name(i)
-        #         dtype = trt.nptype(model.get_binding_dtype(i))
-        #         if model.binding_is_input(i):
-        #             if -1 in tuple(model.get_binding_shape(i)):  # dynamic
-        #                 dynamic = True
-        #                 context.set_binding_shape(i, tuple(model.get_profile_shape(0, i)[2]))
-        #             if dtype == np.float16:
-        #                 fp16 = True
-        #         else:  # output
-        #             output_names.append(name)
-        #         shape = tuple(context.get_binding_shape(i))
-        #         im = torch.from_numpy(np.empty(shape, dtype=dtype)).to(device)
-        #         bindings[name] = Binding(name, dtype, shape, im, int(im.data_ptr()))
-        #     binding_addrs = OrderedDict((n, d.ptr) for n, d in bindings.items())
-        #     batch_size = bindings['images'].shape[0] 
-        if 'cuda' in str(self.device):
-            print("device: 'cuda' - ", end="")
+        # checkpoint = torch.load(checkpoint_path, map_location=self.device)
+        # if 'model' in checkpoint:
+        #     checkpoint = checkpoint['model']
+        # # fix issue with official high-resolution weights
+        # checkpoint = OrderedDict([(k[2:] if k[:2] == '1.' else k, v) for k, v in checkpoint.items()])
+        # self.model.load_state_dict(checkpoint)
 
-            if 'cuda' == str(self.device):
-                # if device is set to 'cuda', all available GPUs will be used
-                print("%d GPU(s) will be used" % torch.cuda.device_count())
-                device_ids = None
-            else:
-                # if device is set to 'cuda:IDS', only that/those device(s) will be used
-                print("GPU(s) '%s' will be used" % str(self.device))
-                device_ids = [int(x) for x in str(self.device)[5:].split(',')]
+        # if 'cuda' in str(self.device):
+        #     print("device: 'cuda' - ", end="")
 
-            self.model = torch.nn.DataParallel(self.model, device_ids=device_ids)
-        elif 'cpu' == str(self.device):
-            print("device: 'cpu'")
-        else:
-            raise ValueError('Wrong device name.')
+        #     if 'cuda' == str(self.device):
+        #         # if device is set to 'cuda', all available GPUs will be used
+        #         print("%d GPU(s) will be used" % torch.cuda.device_count())
+        #         device_ids = None
+        #     else:
+        #         # if device is set to 'cuda:IDS', only that/those device(s) will be used
+        #         print("GPU(s) '%s' will be used" % str(self.device))
+        #         device_ids = [int(x) for x in str(self.device)[5:].split(',')]
+
+        #     self.model = torch.nn.DataParallel(self.model, device_ids=device_ids)
+        # elif 'cpu' == str(self.device):
+        #     print("device: 'cpu'")
+        # else:
+        #     raise ValueError('Wrong device name.')
         if not trt_:
+            checkpoint = torch.load(checkpoint_path, map_location=self.device)
+            if 'model' in checkpoint:
+                checkpoint = checkpoint['model']
+            # fix issue with official high-resolution weights
+            checkpoint = OrderedDict([(k[2:] if k[:2] == '1.' else k, v) for k, v in checkpoint.items()])
+            self.model.load_state_dict(checkpoint)
+            if 'cuda' in str(self.device):
+                print("device: 'cuda' - ", end="")
+
+                if 'cuda' == str(self.device):
+                    # if device is set to 'cuda', all available GPUs will be used
+                    print("%d GPU(s) will be used" % torch.cuda.device_count())
+                    device_ids = None
+                else:
+                    # if device is set to 'cuda:IDS', only that/those device(s) will be used
+                    print("GPU(s) '%s' will be used" % str(self.device))
+                    device_ids = [int(x) for x in str(self.device)[5:].split(',')]
+                self.model = torch.nn.DataParallel(self.model, device_ids=device_ids)
+
+            elif 'cpu' == str(self.device):
+                print("device: 'cpu'")
+            else:
+                raise ValueError('Wrong device name.')
             self.model = self.model.to(device)
             self.model.eval()
         else:
@@ -229,32 +223,8 @@ class SimpleHigherHRNet:
             # self.model = TrtModel('pose_higher_hrnet_w32_512.engine')
             if device.type == 'cpu':
                     device = torch.device('cuda:0')
-            self.model=TRTModule_hrnet(path='pose_higher_hrnet_w32_512.engine',device=self.device)
-            # Binding = namedtuple('Binding', ('name', 'dtype', 'shape', 'data', 'ptr'))
-            # logger = trt.Logger(trt.Logger.INFO)
-            # with open('pose_higher_hrnet_w32_512.engine', 'rb') as f, trt.Runtime(logger) as runtime:
-            #     self.model = runtime.deserialize_cuda_engine(f.read())
-            # self.context = self.model.create_execution_context()
-            # self.bindings = OrderedDict()
-            # self.output_names = []
-            # fp16 = False  # default updated below
-            # dynamic = False
-            # for i in range(self.model.num_bindings):
-            #     name = self.model.get_binding_name(i)
-            #     dtype = trt.nptype(self.model.get_binding_dtype(i))
-            #     if self.model.binding_is_input(i):
-            #         if -1 in tuple(self.model.get_binding_shape(i)):  # dynamic
-            #             dynamic = True
-            #             self.context.set_binding_shape(i, tuple(self.model.get_profile_shape(0, i)[2]))
-            #         if dtype == np.float16:
-            #             fp16 = True
-            #     else:  # output
-            #         self.output_names.append(name)
-            #     shape = tuple(self.context.get_binding_shape(i))
-            #     im = torch.from_numpy(np.empty(shape, dtype=dtype)).to(device)
-            #     self.bindings[name] = Binding(name, dtype, shape, im, int(im.data_ptr()))
-            # self.binding_addrs = OrderedDict((n, d.ptr) for n, d in self.bindings.items())
-            # self.batch_size = self.bindings['images'].shape[0] 
+            self.model=TRTModule_hrnet(path=checkpoint_path,device=self.device)
+
         self.output_parser = HeatmapParser(num_joints=self.nof_joints,
                                            joint_set=self.joint_set,
                                            max_num_people=self.max_nof_people,

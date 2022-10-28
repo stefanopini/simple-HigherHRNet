@@ -4,7 +4,7 @@ import numpy as np
 import torch
 from collections import OrderedDict,namedtuple
 import tensorrt as trt
-starter, ender = torch.cuda.Event(enable_timing=True), torch.cuda.Event(enable_timing=True)
+# starter, ender = torch.cuda.Event(enable_timing=True), torch.cuda.Event(enable_timing=True)
 
 # solution proposed in https://github.com/pytorch/pytorch/issues/229#issuecomment-299424875 
 def flip_tensor(tensor, dim=0):
@@ -372,12 +372,12 @@ def get_multi_stage_outputs(model, image,
     # but it could also be (no checkpoints with this configuration)
     #   [(batch, nof_joints*2, height//4, width//4), (batch, nof_joints*2, height//2, width//2), (batch, nof_joints, height, width)]
     if len(image) <= max_batch_size:
-        print(image.size())
+        # print(image.size())
         # starter.record()
 
         outputs = model(image)
 
-        ender.record()
+        # ender.record()
         # WAIT FOR GPU SYNC
         # torch.cuda.synchronize()
         # curr_time = starter.elapsed_time(ender)
