@@ -15,7 +15,7 @@ from misc.utils import find_person_id_associations
 
 
 def main(camera_id, filename, hrnet_c, hrnet_j, hrnet_weights, hrnet_joints_set, image_resolution, disable_tracking,
-         max_nof_people, max_batch_size, disable_vidgear, save_video, video_format, video_framerate, device, extract_pts,trt_):
+         max_nof_people, max_batch_size, disable_vidgear, save_video, video_format, video_framerate, device, extract_pts,enable_tensorrt):
     if device is not None:
         device = torch.device(device)
     else:
@@ -51,7 +51,7 @@ def main(camera_id, filename, hrnet_c, hrnet_j, hrnet_weights, hrnet_joints_set,
         max_nof_people=max_nof_people,
         max_batch_size=max_batch_size,
         device=device,
-        trt_=trt_
+        enable_tensorrt=enable_tensorrt
     )
 
     if not disable_tracking:
@@ -114,7 +114,7 @@ def main(camera_id, filename, hrnet_c, hrnet_j, hrnet_weights, hrnet_joints_set,
                 pts_dict[frame_count] = pt[:, :2]
 
         fps = 1. / (time.time() - t)
-        print('\rframerate: %f fps / detected people: %d' % (fps, len(pts)), end='')
+        print('\rframerate: %f fps / detected people: %d ' % (fps, len(pts)), end='')
 
         if has_display:
             cv2.imshow('frame.png', frame)
@@ -173,7 +173,8 @@ if __name__ == '__main__':
                                          "set to `cuda:IDS` to use one or more specific GPUs "
                                          "(e.g. `cuda:0` `cuda:1,2`); "
                                          "set to `cpu` to run on cpu.", type=str, default=None)
-    parser.add_argument("--trt_",action='store_true')
+    parser.add_argument("--enable_tensorrt",help="Enables tensorrt inference for HigherHRnet."
+                        "It should be used only after the HigherHRNet engine file has been generated",action='store_true')
     parser.add_argument("--extract_pts", help="save output keypoints in numpy format", action="store_true")
     args = parser.parse_args()
     main(**args.__dict__)

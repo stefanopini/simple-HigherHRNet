@@ -627,10 +627,15 @@ def torch_dtype_from_trt(dtype):
     else:
         raise TypeError("%s is not supported by torch" % dtype)
 class TRTModule_hrnet(torch.nn.Module):
-    def __init__(self, engine=None, input_names=None, output_names=None, input_flattener=None, output_flattener=None,path=None,device=None):
+    """
+    TensorRT wrapper for HigherHRNet.
+    Args:
+        path: Path to the .engine file for trt inference.
+        device: The cuda device to be used
+    
+    """
+    def __init__(self,path=None,device=None):
         super(TRTModule_hrnet, self).__init__()
-        # self._register_state_dict_hook(TRTModule._on_state_dict)
-        # self.engine = engine
         logger = trt.Logger(trt.Logger.INFO)
         with open(path, 'rb') as f, trt.Runtime(logger) as runtime:
             self.engine = runtime.deserialize_cuda_engine(f.read())
@@ -638,15 +643,11 @@ class TRTModule_hrnet(torch.nn.Module):
             self.context = self.engine.create_execution_context()
         self.input_names = ['images']
         self.output_names = []
-        self.input_flattener = input_flattener
-        self.output_flattener = output_flattener
+        self.input_flattener = None
+        self.output_flattener = None
         Binding = namedtuple('Binding', ('name', 'dtype', 'shape', 'data', 'ptr'))
         
-        # with open(path, 'rb') as f, trt.Runtime(logger) as runtime:
-        #     self.model = runtime.deserialize_cuda_engine(f.read())
-        # self.context = self.model.create_execution_context()
         self.bindings = OrderedDict()
-        # self.output_names = []
         fp16 = False  # default updated below
         dynamic = False
         for i in range(self.engine.num_bindings):
@@ -658,7 +659,7 @@ class TRTModule_hrnet(torch.nn.Module):
                     self.context.set_binding_shape(i, tuple(self.engine.get_profile_shape(0, i)[2]))
                 if dtype == np.float16:
                     fp16 = True
-            else:  # output
+            else:  
                 self.output_names.append(name)
             shape = tuple(self.context.get_binding_shape(i))
             im = torch.from_numpy(np.empty(shape, dtype=dtype)).to(device)

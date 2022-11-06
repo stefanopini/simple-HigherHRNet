@@ -9,83 +9,8 @@ from models.higherhrnet import HigherHRNet
 from misc.HeatmapParser import HeatmapParser
 from misc.utils import get_multi_scale_size, resize_align_multi_scale, get_multi_stage_outputs, aggregate_results, get_final_preds, bbox_iou,TRTModule_hrnet
 from collections import OrderedDict,namedtuple
-# from cuda import cuda, nvrtc
 
-# class HostDeviceMem(object):
-#     def __init__(self, host_mem, device_mem):
-#         self.host = host_mem
-#         self.device = device_mem
 
-#     def __str__(self):
-#         return "Host:\n" + str(self.host) + "\nDevice:\n" + str(self.device)
-
-#     def __repr__(self):
-#         return self.__str__()
-# class TrtModel:
-    
-#     def __init__(self,engine_path,max_batch_size=1,dtype=np.float32):
-        
-#         self.engine_path = engine_path
-#         self.dtype = dtype
-#         self.logger = trt.Logger(trt.Logger.WARNING)
-#         self.runtime = trt.Runtime(self.logger)
-#         self.engine = self.load_engine(self.runtime, self.engine_path)
-#         self.max_batch_size = max_batch_size
-#         self.inputs, self.outputs, self.bindings, self.stream = self.allocate_buffers()
-#         self.context = self.engine.create_execution_context()
-
-                
-                
-#     @staticmethod
-#     def load_engine(trt_runtime, engine_path):
-#         trt.init_libnvinfer_plugins(None, "")             
-#         with open(engine_path, 'rb') as f:
-#             engine_data = f.read()
-#         engine = trt_runtime.deserialize_cuda_engine(engine_data)
-#         return engine
-    
-#     def allocate_buffers(self):
-        
-#         inputs = []
-#         outputs = []
-#         bindings = []
-#         # stream = cuda.Stream()
-#         err, stream = cuda.cuStreamCreate(0)
-        
-#         for binding in self.engine:
-#             size = trt.volume(self.engine.get_binding_shape(binding)) * self.max_batch_size
-#             err, dXclass = cuda.cuMemAlloc(size)
-#             err, dYclass = cuda.cuMemAlloc(size)
-#             err, dOutclass = cuda.cuMemAlloc(size)
-#             host_mem = cuda.pagelocked_empty(size, self.dtype)
-#             device_mem = cuda.mem_alloc(host_mem.nbytes)
-            
-#             bindings.append(int(device_mem))
-
-#             if self.engine.binding_is_input(binding):
-#                 inputs.append(HostDeviceMem(host_mem, device_mem))
-#             else:
-#                 outputs.append(HostDeviceMem(host_mem, device_mem))
-        
-#         return inputs, outputs, bindings, stream
-       
-            
-#     def __call__(self,x:np.ndarray,batch_size=2):
-        
-#         x = x.astype(self.dtype)
-        
-#         np.copyto(self.inputs[0].host,x.ravel())
-        
-#         for inp in self.inputs:
-#             cuda.memcpy_htod_async(inp.device, inp.host, self.stream)
-        
-#         self.context.execute_async(batch_size=batch_size, bindings=self.bindings, stream_handle=self.stream.handle)
-#         for out in self.outputs:
-#             cuda.memcpy_dtoh_async(out.host, out.device, self.stream) 
-            
-        
-#         self.stream.synchronize()
-#         return [out.host.reshape(batch_size,-1) for out in self.outputs]
 class SimpleHigherHRNet:
     """
     SimpleHigherHRNet class.
@@ -107,7 +32,7 @@ class SimpleHigherHRNet:
                  max_nof_people=30,
                  max_batch_size=32,
                  device=torch.device("cpu"),
-                 trt_=False):
+                 enable_tensorrt=False):
         """
         Initializes a new SimpleHigherHRNet object.
         HigherHRNet is initialized on the torch.device("device") and
@@ -151,7 +76,7 @@ class SimpleHigherHRNet:
         self.max_nof_people = max_nof_people
         self.max_batch_size = max_batch_size
         self.device = device
-        self.trt_=trt_
+        self.enable_tensorrt=enable_tensorrt
 
         # assert nof_joints in (14, 15, 17)
         if self.nof_joints == 14:
@@ -168,31 +93,7 @@ class SimpleHigherHRNet:
         else:
             raise ValueError('Wrong model name.')
 
-        # checkpoint = torch.load(checkpoint_path, map_location=self.device)
-        # if 'model' in checkpoint:
-        #     checkpoint = checkpoint['model']
-        # # fix issue with official high-resolution weights
-        # checkpoint = OrderedDict([(k[2:] if k[:2] == '1.' else k, v) for k, v in checkpoint.items()])
-        # self.model.load_state_dict(checkpoint)
-
-        # if 'cuda' in str(self.device):
-        #     print("device: 'cuda' - ", end="")
-
-        #     if 'cuda' == str(self.device):
-        #         # if device is set to 'cuda', all available GPUs will be used
-        #         print("%d GPU(s) will be used" % torch.cuda.device_count())
-        #         device_ids = None
-        #     else:
-        #         # if device is set to 'cuda:IDS', only that/those device(s) will be used
-        #         print("GPU(s) '%s' will be used" % str(self.device))
-        #         device_ids = [int(x) for x in str(self.device)[5:].split(',')]
-
-        #     self.model = torch.nn.DataParallel(self.model, device_ids=device_ids)
-        # elif 'cpu' == str(self.device):
-        #     print("device: 'cpu'")
-        # else:
-        #     raise ValueError('Wrong device name.')
-        if not trt_:
+        if not self.enable_tensorrt:
             checkpoint = torch.load(checkpoint_path, map_location=self.device)
             if 'model' in checkpoint:
                 checkpoint = checkpoint['model']
@@ -219,10 +120,8 @@ class SimpleHigherHRNet:
             self.model = self.model.to(device)
             self.model.eval()
         else:
-            # import pycuda.driver as cuda
-            # self.model = TrtModel('pose_higher_hrnet_w32_512.engine')
             if device.type == 'cpu':
-                    device = torch.device('cuda:0')
+                raise ValueError('TensorRT does not support cpu device.')
             self.model=TRTModule_hrnet(path=checkpoint_path,device=self.device)
 
         self.output_parser = HeatmapParser(num_joints=self.nof_joints,
