@@ -1,10 +1,11 @@
+from collections import OrderedDict, namedtuple
+
 import cv2
 import munkres
 import numpy as np
-import torch
-from collections import OrderedDict,namedtuple
 import tensorrt as trt
-# starter, ender = torch.cuda.Event(enable_timing=True), torch.cuda.Event(enable_timing=True)
+import torch
+
 
 # solution proposed in https://github.com/pytorch/pytorch/issues/229#issuecomment-299424875 
 def flip_tensor(tensor, dim=0):
@@ -372,17 +373,7 @@ def get_multi_stage_outputs(model, image,
     # but it could also be (no checkpoints with this configuration)
     #   [(batch, nof_joints*2, height//4, width//4), (batch, nof_joints*2, height//2, width//2), (batch, nof_joints, height, width)]
     if len(image) <= max_batch_size:
-        # print(image.size())
-        # starter.record()
-
         outputs = model(image)
-
-        # ender.record()
-        # WAIT FOR GPU SYNC
-        # torch.cuda.synchronize()
-        # curr_time = starter.elapsed_time(ender)
-        # print(curr_time)
-
     else:
         outputs = [
             torch.empty((image.shape[0], nof_joints * 2, image.shape[-2] // 4, image.shape[-1] // 4),
@@ -606,6 +597,9 @@ def get_final_preds(grouped_joints, center, scale, heatmap_size):
 #
 #
 
+
+#
+# TensorRT - derived from https://github.com/ultralytics/yolov5
 def torch_device_from_trt(device):
     if device == trt.TensorLocation.DEVICE:
         return torch.device("cuda")
@@ -613,6 +607,8 @@ def torch_device_from_trt(device):
         return torch.device("cpu")
     else:
         return TypeError("%s is not supported by torch" % device)
+
+
 def torch_dtype_from_trt(dtype):
     if dtype == trt.int8:
         return torch.int8
@@ -626,25 +622,30 @@ def torch_dtype_from_trt(dtype):
         return torch.float32
     else:
         raise TypeError("%s is not supported by torch" % dtype)
-class TRTModule_hrnet(torch.nn.Module):
+
+
+class TRTModule_HigherHRNet(torch.nn.Module):
     """
     TensorRT wrapper for HigherHRNet.
     Args:
-        path: Path to the .engine file for trt inference.
-        device: The cuda device to be used
-    
+        path (str): Path to the .engine file for trt inference.
+        device (:class:`torch.device` or str): The cuda device to be used (cpu not supported)
     """
-    def __init__(self,path=None,device=None):
-        super(TRTModule_hrnet, self).__init__()
+    def __init__(self, path=None, device=None):
+        super(TRTModule_HigherHRNet, self).__init__()
+
         logger = trt.Logger(trt.Logger.INFO)
+
         with open(path, 'rb') as f, trt.Runtime(logger) as runtime:
             self.engine = runtime.deserialize_cuda_engine(f.read())
         if self.engine is not None:
             self.context = self.engine.create_execution_context()
+
         self.input_names = ['images']
         self.output_names = []
         self.input_flattener = None
         self.output_flattener = None
+
         Binding = namedtuple('Binding', ('name', 'dtype', 'shape', 'data', 'ptr'))
         
         self.bindings = OrderedDict()
@@ -653,6 +654,7 @@ class TRTModule_hrnet(torch.nn.Module):
         for i in range(self.engine.num_bindings):
             name = self.engine.get_binding_name(i)
             dtype = trt.nptype(self.engine.get_binding_dtype(i))
+
             if self.engine.binding_is_input(i):
                 if -1 in tuple(self.engine.get_binding_shape(i)):  # dynamic
                     dynamic = True
@@ -661,15 +663,17 @@ class TRTModule_hrnet(torch.nn.Module):
                     fp16 = True
             else:  
                 self.output_names.append(name)
+
             shape = tuple(self.context.get_binding_shape(i))
             im = torch.from_numpy(np.empty(shape, dtype=dtype)).to(device)
-            self.bindings[name] = Binding(name, dtype, shape, im, int(im.data_ptr()))
-        self.binding_addrs = OrderedDict((n, d.ptr) for n, d in self.bindings.items())
-        self.batch_size = self.bindings['images'].shape[0] 
 
-    
+            self.bindings[name] = Binding(name, dtype, shape, im, int(im.data_ptr()))
+
+        self.binding_addrs = OrderedDict((n, d.ptr) for n, d in self.bindings.items())
+        self.batch_size = self.bindings['images'].shape[0]
 
     def forward(self, *inputs):
+        """Forward of the model. For more details, please refer to models.higherhrnet.HigherHRNet.forward ."""
         bindings = [None] * (len(self.input_names) + len(self.output_names))
         
         if self.input_flattener is not None:
@@ -708,3 +712,5 @@ class TRTModule_hrnet(torch.nn.Module):
     def enable_profiling(self):
         if not self.context.profiler:
             self.context.profiler = trt.Profiler()
+#
+#

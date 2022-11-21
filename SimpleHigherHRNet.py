@@ -1,14 +1,14 @@
-from collections import OrderedDict
+from collections import OrderedDict, namedtuple
 
 import cv2
 import numpy as np
 import torch
+
 from torchvision.transforms import transforms
-import tensorrt as trt
 from models.higherhrnet import HigherHRNet
 from misc.HeatmapParser import HeatmapParser
-from misc.utils import get_multi_scale_size, resize_align_multi_scale, get_multi_stage_outputs, aggregate_results, get_final_preds, bbox_iou,TRTModule_hrnet
-from collections import OrderedDict,namedtuple
+from misc.utils import (get_multi_scale_size, resize_align_multi_scale, get_multi_stage_outputs, aggregate_results,
+                        get_final_preds, bbox_iou, TRTModule_HigherHRNet)
 
 
 class SimpleHigherHRNet:
@@ -62,6 +62,9 @@ class SimpleHigherHRNet:
                 Default: 16
             device (:class:`torch.device` or str): the higherhrnet (and yolo) inference will be run on this device.
                 Default: torch.device("cpu")
+            enable_tensorrt (bool): Enables tensorrt inference for HigherHRnet.
+                If enabled, a `.engine` file is expected as `checkpoint_path`.
+                Default: False
         """
 
         self.c = c
@@ -111,18 +114,20 @@ class SimpleHigherHRNet:
                     # if device is set to 'cuda:IDS', only that/those device(s) will be used
                     print("GPU(s) '%s' will be used" % str(self.device))
                     device_ids = [int(x) for x in str(self.device)[5:].split(',')]
+
                 self.model = torch.nn.DataParallel(self.model, device_ids=device_ids)
 
             elif 'cpu' == str(self.device):
                 print("device: 'cpu'")
             else:
                 raise ValueError('Wrong device name.')
+
             self.model = self.model.to(device)
             self.model.eval()
         else:
             if device.type == 'cpu':
                 raise ValueError('TensorRT does not support cpu device.')
-            self.model=TRTModule_hrnet(path=checkpoint_path,device=self.device)
+            self.model = TRTModule_HigherHRNet(path=checkpoint_path, device=self.device)
 
         self.output_parser = HeatmapParser(num_joints=self.nof_joints,
                                            joint_set=self.joint_set,
@@ -207,7 +212,6 @@ class SimpleHigherHRNet:
                     image = image.to(self.device)
                     images.append(image)
                 images = torch.cat(images)
-                # images=images
 
                 # inference
                 # output: list of HigherHRNet outputs (heatmaps)
