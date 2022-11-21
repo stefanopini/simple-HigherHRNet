@@ -1,4 +1,4 @@
-# YOLOv5 🚀 by Ultralytics, GPL-3.0 license
+# YOLOv5 🚀 by Ultralytics, GPL-3.0 license - https://github.com/ultralytics/yolov5
 """
 Export HigherHRNet in TensorRT inference engine format. Modified from yolov5 export.py function.
 Usage:
@@ -7,20 +7,23 @@ Usage:
 """
 
 import argparse
-import json
 import os
 import platform
-import re
-import subprocess
 import sys
 import time
 import warnings
+sys.path.insert(1, os.getcwd())
+
 from pathlib import Path
 
+import onnx
 import pandas as pd
 import torch
-from torch.utils.mobile_optimizer import optimize_for_mobile
-sys.path.insert(1, os.getcwd())
+
+from utils.yolov5.general import (LOGGER, Profile, check_requirements, check_version, colorstr, file_size,
+                                  get_default_args, print_args, url2file)
+from utils.yolov5.torch_utils import select_device, smart_inference_mode
+from models.higherhrnet import HigherHRNet
 
 FILE = Path(__file__).resolve()
 ROOT = FILE.parents[0]  # YOLOv5 root directory
@@ -28,13 +31,6 @@ if str(ROOT) not in sys.path:
     sys.path.append(str(ROOT))  # add ROOT to PATH
 if platform.system() != 'Windows':
     ROOT = Path(os.path.relpath(ROOT, Path.cwd()))  # relative
-
-from utils.yolov5.dataloaders import LoadImages
-from utils.yolov5.general import (LOGGER, Profile, check_dataset, check_img_size, check_requirements, check_version,
-                           check_yaml, colorstr, file_size, get_default_args, print_args, url2file, yaml_save)
-from utils.yolov5.torch_utils import select_device, smart_inference_mode
-from models.higherhrnet import HigherHRNet
-
 MACOS = platform.system() == 'Darwin'  # macOS environment
 
 
@@ -64,24 +60,17 @@ def try_export(inner_func):
     return outer_func
 
 
-
 @try_export
 def export_onnx(model, im, file, opset, dynamic, simplify, prefix=colorstr('ONNX:')):
     # YOLOv5 ONNX export
     check_requirements('onnx')
-    import onnx
 
     LOGGER.info(f'\n{prefix} starting export with onnx {onnx.__version__}...')
     f = file.with_suffix('.onnx')
 
-    output_names = ['output0', 'output1'] #if isinstance(model, SegmentationModel) else ['output0']
+    output_names = ['output0', 'output1']
     if dynamic:
         dynamic = {'images': {0: 'batch', 2: 'height', 3: 'width'}}  # shape(1,3,640,640)
-        if isinstance(model, SegmentationModel):
-            dynamic['output0'] = {0: 'batch', 1: 'anchors'}  # shape(1,25200,85)
-            dynamic['output1'] = {0: 'batch', 2: 'mask_height', 3: 'mask_width'}  # shape(1,32,160,160)
-        elif isinstance(model, DetectionModel):
-            dynamic['output0'] = {0: 'batch', 1: 'anchors'}  # shape(1,25200,85)
 
     torch.onnx.export(
         model.cpu() if dynamic else model,  # --dynamic only compatible with cpu
@@ -93,7 +82,6 @@ def export_onnx(model, im, file, opset, dynamic, simplify, prefix=colorstr('ONNX
         input_names=['images'],
         output_names=output_names,
         dynamic_axes=dynamic or None)
-
 
     model_onnx = onnx.load(f)  # load onnx model
     onnx.checker.check_model(model_onnx)  # check onnx model
@@ -113,6 +101,7 @@ def export_onnx(model, im, file, opset, dynamic, simplify, prefix=colorstr('ONNX
         except Exception as e:
             LOGGER.info(f'{prefix} simplifier failure: {e}')
     return f, model_onnx
+
 
 @try_export
 def export_engine(model, im, file, half, dynamic, simplify, workspace=2, verbose=False, prefix=colorstr('TensorRT:')):
@@ -171,40 +160,52 @@ def export_engine(model, im, file, half, dynamic, simplify, workspace=2, verbose
         t.write(engine.serialize())
     return f, None
 
-@smart_inference_mode()
-def run(
-        weights=ROOT / 'pose_higher_hrnet_w32_512',  # weights path
-        imgsz=(512, 960),  # image (height, width)
-        batch_size=1,  # batch size
-        device='cpu',  # cuda device, i.e. 0 or 0,1,2,3 or cpu
-        include=('torchscript', 'onnx'),  # include formats
-        half=False,  # FP16 half-precision export
-        int8=False,  # CoreML/TF INT8 quantization
-        dynamic=False,  # ONNX/TF/TensorRT: dynamic axes
-        simplify=False,  # ONNX: simplify model
-        opset=12,  # ONNX: opset version
-        verbose=False,  # TensorRT: verbose log
-        workspace=2,  # TensorRT: workspace size (GB)
 
-):
+@smart_inference_mode()
+def run(weights, hrnet_c, hrnet_j, imgsz=(512, 960), batch_size=1, device='cpu', include=('torchscript', 'onnx'),
+        half=False, int8=False, dynamic=False, simplify=False, opset=12, verbose=False, workspace=2):
+    """Runs the model conversion from PyTorch to TensorRT.
+
+    Args:
+        weights (Path or str): HigherHRNet weights path
+        hrnet_c (int): HigherHRNet number of channels
+        hrnet_j (int): HigherHRNet number of joints
+        imgsz (tuple(int, int)): image size (height, width)
+        batch_size (int): batch size
+        device (str): cuda device, i.e. 0 or 0,1,2,3 or cpu
+        include (tuple(str, ...): include formats
+        half (bool): FP16 half-precision export
+        int8 (bool): CoreML/TF INT8 quantization (currently not supported)
+        dynamic (bool): ONNX/TF/TensorRT: dynamic axes
+        simplify (bool): ONNX: simplify model
+        opset (int): ONNX: opset version (currently unused)
+        verbose (bool): TensorRT: verbose log
+        workspace (float): TensorRT: workspace size (GB)
+
+    Returns:
+        List of exported files/dirs
+    """
     t = time.time()
     include = [x.lower() for x in include]  # to lowercase
     fmts = tuple(export_formats()['Argument'][1:])  # --include arguments
     flags = [x in include for x in fmts]
     assert sum(flags) == len(include), f'ERROR: Invalid --include {include}, valid --include arguments are {fmts}'
     engine = flags  # export booleans
-    file = Path(url2file(weights) if str(weights).startswith(('http:/', 'https:/')) else weights)  # PyTorch weights
+    weights_file = Path(url2file(weights) if str(weights).startswith(('http:/', 'https:/')) else weights)  # PyTorch weights
 
     # Load PyTorch model
     device = select_device(device)
+
     if half:
-        assert device.type != 'cpu' or coreml, '--half only compatible with GPU export, i.e. use --device 0'
+        assert device.type != 'cpu', '--half only compatible with GPU export, i.e. use --device 0'
         assert not dynamic, '--half not compatible with --dynamic, i.e. use either --half or --dynamic but not both'
-    # model = attempt_load(weights, device=device, inplace=True, fuse=True)  # load FP32 model
-    model = HigherHRNet(32,17)
-    
+    if int8:
+        raise NotImplementedError
+
+    model = HigherHRNet(c=hrnet_c, nof_joints=hrnet_j)
     model.load_state_dict(torch.load(weights))
     model.cuda()
+
     # Checks
     imgsz *= 2 if len(imgsz) == 1 else 1  # expand
     im = torch.zeros(batch_size, 3, imgsz[0],imgsz[1]).to(device)  # image size(1,3,320,192) BCHW iDetection
@@ -218,18 +219,22 @@ def run(
     f = [''] * len(fmts)  # exported filenames
     warnings.filterwarnings(action='ignore', category=torch.jit.TracerWarning)  # suppress TracerWarning
     if engine:  # TensorRT required before ONNX
-        f[0], _ = export_engine(model, im, file, half, dynamic, simplify, workspace, verbose)
+        f[0], _ = export_engine(model, im, weights_file, half, dynamic, simplify, workspace, verbose)
 
+    # f is a list of exported files/dirs
     f = [str(x) for x in f if x]  # filter out '' and None
     if any(f):
         LOGGER.info(f'\nExport complete ({time.time() - t:.1f}s)')
 
-    return f  # return list of exported files/dirs
+    return f
 
 
 def parse_opt():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--weights', nargs='+', type=str, default=ROOT / '../pose_higher_hrnet_w32_512.pth', help='model.pth path(s)')
+    parser.add_argument('--weights', nargs='+', type=str, default='./weights/pose_higher_hrnet_w32_512.pth',
+                        help='model.pth path(s)')
+    parser.add_argument("--hrnet_c", "-c", help="hrnet parameters - number of channels", type=int, default=32)
+    parser.add_argument("--hrnet_j", "-j", help="hrnet parameters - number of joints", type=int, default=17)
     parser.add_argument('--imgsz', '--img', '--img-size', nargs='+', type=list, default=[512, 960], help='image (h, w)')
     parser.add_argument('--batch-size', type=int, default=1, help='batch size')
     parser.add_argument('--device', default='cpu', help='cuda device, i.e. 0 or 0,1,2,3 or cpu')
@@ -240,11 +245,7 @@ def parse_opt():
     parser.add_argument('--opset', type=int, default=12, help='ONNX: opset version')
     parser.add_argument('--verbose', action='store_true', help='TensorRT: verbose log')
     parser.add_argument('--workspace', type=int, default=1, help='TensorRT: workspace size (GB)')
-    parser.add_argument(
-        '--include',
-        nargs='+',
-        default=['engine'],
-        help='Export type to be included. Works on ')
+    parser.add_argument('--include', nargs='+', default=['engine'], help='Export type to be included.')
     opt = parser.parse_args()
     print_args(vars(opt))
     return opt
