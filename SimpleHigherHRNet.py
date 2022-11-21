@@ -1,14 +1,14 @@
-from collections import OrderedDict, namedtuple
+from collections import OrderedDict
 
 import cv2
 import numpy as np
 import torch
-
 from torchvision.transforms import transforms
+
 from models.higherhrnet import HigherHRNet
 from misc.HeatmapParser import HeatmapParser
 from misc.utils import (get_multi_scale_size, resize_align_multi_scale, get_multi_stage_outputs, aggregate_results,
-                        get_final_preds, bbox_iou, TRTModule_HigherHRNet)
+                        get_final_preds)
 
 
 class SimpleHigherHRNet:
@@ -79,7 +79,7 @@ class SimpleHigherHRNet:
         self.max_nof_people = max_nof_people
         self.max_batch_size = max_batch_size
         self.device = device
-        self.enable_tensorrt=enable_tensorrt
+        self.enable_tensorrt = enable_tensorrt
 
         # assert nof_joints in (14, 15, 17)
         if self.nof_joints == 14:
@@ -127,6 +127,7 @@ class SimpleHigherHRNet:
         else:
             if device.type == 'cpu':
                 raise ValueError('TensorRT does not support cpu device.')
+            from misc.tensorrt_utils import TRTModule_HigherHRNet
             self.model = TRTModule_HigherHRNet(path=checkpoint_path, device=self.device)
 
         self.output_parser = HeatmapParser(num_joints=self.nof_joints,
