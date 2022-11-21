@@ -7,7 +7,7 @@ import time
 import torch
 from vidgear.gears import CamGear
 import numpy as np
-
+# import time
 sys.path.insert(1, os.getcwd())
 from SimpleHigherHRNet import SimpleHigherHRNet
 from misc.visualization import draw_points, draw_skeleton, draw_points_and_skeleton, joints_dict, check_video_rotation
@@ -15,7 +15,7 @@ from misc.utils import find_person_id_associations
 
 
 def main(camera_id, filename, hrnet_c, hrnet_j, hrnet_weights, hrnet_joints_set, image_resolution, disable_tracking,
-         max_nof_people, max_batch_size, disable_vidgear, save_video, video_format, video_framerate, device, extract_pts):
+         max_nof_people, max_batch_size, disable_vidgear, save_video, video_format, video_framerate, device, extract_pts,enable_tensorrt):
     if device is not None:
         device = torch.device(device)
     else:
@@ -25,7 +25,7 @@ def main(camera_id, filename, hrnet_c, hrnet_j, hrnet_weights, hrnet_joints_set,
         else:
             device = torch.device('cpu')
 
-    # print(device)
+
 
     has_display = 'DISPLAY' in os.environ.keys() or sys.platform == 'win32'
     video_writer = None
@@ -50,7 +50,8 @@ def main(camera_id, filename, hrnet_c, hrnet_j, hrnet_weights, hrnet_joints_set,
         return_bounding_boxes=not disable_tracking,
         max_nof_people=max_nof_people,
         max_batch_size=max_batch_size,
-        device=device
+        device=device,
+        enable_tensorrt=enable_tensorrt
     )
 
     if not disable_tracking:
@@ -61,22 +62,26 @@ def main(camera_id, filename, hrnet_c, hrnet_j, hrnet_weights, hrnet_joints_set,
 
     frame_count = 0
     pts_dict = {}
+    t1= time.time()
     while True:
         t = time.time()
 
         if filename is not None or disable_vidgear:
             ret, frame = video.read()
+            
+
             if not ret:
                 break
+
             if rotation_code is not None:
                 frame = cv2.rotate(frame, rotation_code)
         else:
             frame = video.read()
+            # frame = cv2.resize(frame,(672,376))
             if frame is None:
                 break
-
         pts = model.predict(frame)
-
+        # print(pts)
         if not disable_tracking:
             boxes, pts = pts
 
@@ -109,7 +114,7 @@ def main(camera_id, filename, hrnet_c, hrnet_j, hrnet_weights, hrnet_joints_set,
                 pts_dict[frame_count] = pt[:, :2]
 
         fps = 1. / (time.time() - t)
-        print('\rframerate: %f fps / detected people: %d' % (fps, len(pts)), end='')
+        print('\rframerate: %f fps / detected people: %d ' % (fps, len(pts)), end='')
 
         if has_display:
             cv2.imshow('frame.png', frame)
@@ -129,7 +134,8 @@ def main(camera_id, filename, hrnet_c, hrnet_j, hrnet_weights, hrnet_joints_set,
                 video_writer = cv2.VideoWriter('output.avi', fourcc, video_framerate, (frame.shape[1], frame.shape[0]))
             video_writer.write(frame)
         frame_count += 1
-
+    t2 =time.time()
+    print('\rTime elapsed == ',t2-t1)
     if extract_pts:
         np.savez_compressed("output_pts", pts_dict)
     if save_video:
@@ -145,7 +151,7 @@ if __name__ == '__main__':
                                                 "resnet size (if model is PoseResNet)", type=int, default=32)
     parser.add_argument("--hrnet_j", "-j", help="hrnet parameters - number of joints", type=int, default=17)
     parser.add_argument("--hrnet_weights", "-w", help="hrnet parameters - path to the pretrained weights",
-                        type=str, default="./weights/pose_higher_hrnet_w32_512.pth")
+                        type=str, default="./pose_higher_hrnet_w32_512.pth")
     parser.add_argument("--hrnet_joints_set",
                         help="use the specified set of joints ('coco' and 'mpii' are currently supported)",
                         type=str, default="coco")
@@ -167,6 +173,8 @@ if __name__ == '__main__':
                                          "set to `cuda:IDS` to use one or more specific GPUs "
                                          "(e.g. `cuda:0` `cuda:1,2`); "
                                          "set to `cpu` to run on cpu.", type=str, default=None)
+    parser.add_argument("--enable_tensorrt",help="Enables tensorrt inference for HigherHRnet."
+                        "It should be used only after the HigherHRNet engine file has been generated",action='store_true')
     parser.add_argument("--extract_pts", help="save output keypoints in numpy format", action="store_true")
     args = parser.parse_args()
     main(**args.__dict__)
