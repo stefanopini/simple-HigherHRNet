@@ -17,6 +17,8 @@ estimation, loads the pre-trained weights, and make human predictions on a singl
 - Support for multi-GPU inference.
 - Multi-person support by design (HigherHRNet is a bottom-up approach).
 - A reference code that runs a live demo reading frames from a webcam or a video file.
+- **NEW** Support for TensorRT (thanks to [@gpastal24](https://github.com/gpastal24), see [#14](https://github.com/stefanopini/simple-HigherHRNet/pull/14) and [#15](https://github.com/stefanopini/simple-HigherHRNet/pull/15)).
+- **NEW** A [Jupyter Notebook](https://github.com/stefanopini/simple-HigherHRNet/blob/master/colab_notebook.ipynb) compatible with Google Colab showcasing how to use this repository.
 
 This repository is built along the lines of the repository
 [*simple-HRNet*](https://github.com/stefanopini/simple-HRNet).  
@@ -110,6 +112,24 @@ For help:
 python scripts/extract-keypoints.py --help
 ```
 
+### Converting the model to TensorRT:
+
+Warning: require the installation of TensorRT (see Nvidia website) and onnx.
+On some platforms, they can be installed with
+```
+pip install tensorrt onnx
+```
+
+Converting in FP16:
+```
+python scripts/export-tensorrt-model.py --device 0 --half
+```
+
+For help:
+```
+python scripts/export-tensorrt-model.py --help
+```
+
 ### Installation instructions
 
 - Clone the repository  
@@ -143,3 +163,5 @@ python scripts/extract-keypoints.py --help
 - [ ] Optimize the post-processing steps
 - [ ] Add COCO dataset and evaluation
 - [ ] Add Train/Test scripts
+- [x] Add TensorRT support
+- [x] Add notebook compatible with Colab
