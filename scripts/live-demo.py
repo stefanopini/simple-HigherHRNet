@@ -166,7 +166,7 @@ if __name__ == '__main__':
                         action="store_true")  # see https://pypi.org/project/vidgear/
     parser.add_argument("--save_video", help="save output frames into a video.", action="store_true")
     parser.add_argument("--video_format", help="fourcc video format. Common formats: `MJPG`, `XVID`, `X264`."
-                                                     "See http://www.fourcc.org/codecs.php", type=str, default='MJPG')
+                                               "See http://www.fourcc.org/codecs.php", type=str, default='MJPG')
     parser.add_argument("--video_framerate", help="video framerate", type=float, default=30)
     parser.add_argument("--device", help="device to be used (default: cuda, if available)."
                                          "Set to `cuda` to use all available GPUs (default); "
@@ -176,7 +176,7 @@ if __name__ == '__main__':
     parser.add_argument("--enable_tensorrt",
                         help="Enables tensorrt inference for HigherHRnet. If enabled, a `.engine` file is expected as "
                              "weights (`--hrnet_weights`). This option should be used only after the HigherHRNet "
-                             "engine file has been generated using the script `scripts/export_tensorrt_model.py`.",
+                             "engine file has been generated using the script `scripts/export-tensorrt-model.py`.",
                         action='store_true')
     parser.add_argument("--extract_pts", help="save output keypoints in numpy format", action="store_true")
     args = parser.parse_args()
