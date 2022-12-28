@@ -19,7 +19,7 @@ estimation, loads the pre-trained weights, and make human predictions on a singl
 - A reference code that runs a live demo reading frames from a webcam or a video file.
 - **NEW** Support for TensorRT (thanks to [@gpastal24](https://github.com/gpastal24), see [#14](https://github.com/stefanopini/simple-HigherHRNet/pull/14) and [#15](https://github.com/stefanopini/simple-HigherHRNet/pull/15)).
 - **NEW** A [Jupyter Notebook](https://github.com/stefanopini/simple-HigherHRNet/blob/master/SimpleHigherHRNet_notebook.ipynb) compatible with Google Colab showcasing how to use this repository.
-    - [Click here](https://colab.research.google.com/github/stefanopini/simple-HigherHRNet/blob/master/SimpleHigherHRNet_notebook.ipynb) to open the notebook on Colab!
+    - <a href="https://colab.research.google.com/github/stefanopini/simple-HigherHRNet/blob/master/SimpleHigherHRNet_notebook.ipynb"><img src="https://colab.research.google.com/assets/colab-badge.svg" alt="Open In Colab"></a> [Click here](https://colab.research.google.com/github/stefanopini/simple-HigherHRNet/blob/master/SimpleHigherHRNet_notebook.ipynb) to open the notebook on Colab!
 
 This repository is built along the lines of the repository
 [*simple-HRNet*](https://github.com/stefanopini/simple-HRNet).  
